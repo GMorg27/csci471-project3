@@ -142,29 +142,34 @@ int main (int argc, char *argv[]) {
 
 		if (ready) {
 			struct sockaddr_in recvAddr;
-			socklen_t recvAddrLen = 0;
+			socklen_t recvAddrLen = sizeof(recvAddr);
 			if (recvfrom(recvFd, recvBuffer, BUFFER_LEN, 0, (struct sockaddr *)&recvAddr, &recvAddrLen) < 0) {
 				ERROR << "recvfrom error: " << std::strerror(errno) << ENDL;
 				continue;
 			}
 
 			struct iphdr *ipResp = (struct iphdr *)recvBuffer;
-			struct icmphdr *icmpResp = (struct icmphdr *)(recvBuffer + ipResp->ihl * 4);
-			if (icmpResp->type == ICMP_ECHOREPLY) {
-				DEBUG << "ICMP echo response received" << ENDL;
-				char respIp[INET_ADDRSTRLEN];
-				inet_ntop(AF_INET, &recvAddr.sin_addr, respIp, INET_ADDRSTRLEN);
-				std::cout << respIp << std::endl;
-				break;
-			}
-			else if (icmpResp->type == ICMP_TIME_EXCEEDED && icmpResp->code == ICMP_EXC_TTL) {
-				DEBUG << "ICMP TTL exceeded response received" << ENDL;
-				char respIp[INET_ADDRSTRLEN];
-				inet_ntop(AF_INET, &recvAddr.sin_addr, respIp, INET_ADDRSTRLEN);
-				std::cout << respIp << std::endl;
+			if (ipResp->protocol == IPPROTO_ICMP) {
+				struct icmphdr *icmpResp = (struct icmphdr *)(recvBuffer + ipResp->ihl * 4);
+				if (icmpResp->type == ICMP_ECHOREPLY) {
+					DEBUG << "ICMP echo response received" << ENDL;
+					char respIp[INET_ADDRSTRLEN];
+					inet_ntop(AF_INET, &recvAddr.sin_addr, respIp, INET_ADDRSTRLEN);
+					std::cout << respIp << std::endl;
+					break;
+				}
+				else if (icmpResp->type == ICMP_TIME_EXCEEDED && icmpResp->code == ICMP_EXC_TTL) {
+					DEBUG << "ICMP TTL exceeded response received" << ENDL;
+					char respIp[INET_ADDRSTRLEN];
+					inet_ntop(AF_INET, &recvAddr.sin_addr, respIp, INET_ADDRSTRLEN);
+					std::cout << respIp << std::endl;
+				}
+				else {
+					WARNING << "Other ICMP type/subtype received" << ENDL;
+				}
 			}
 			else {
-				WARNING << "Other ICMP type/subtype received" << ENDL;
+				WARNING << "Non-ICMP protocol received" << ENDL;
 			}
 		}
 		else {
