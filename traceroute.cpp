@@ -19,30 +19,6 @@ uint16_t checksum(unsigned short *buffer, int size) {
 }
 
 
-// ****************************************************************************
-// * Create an ICMP echo request packet.
-// ****************************************************************************
-void build_icmp_packet(uint8_t *packet, unsigned int len, uint32_t destIp, unsigned int ttl) {
-	memset(packet, 'A', len); // Fill payload
-	
-	struct iphdr *ipHeader = (struct iphdr *)packet;
-	ipHeader->ihl = 5; // Header length / 4
-	ipHeader->version = 4;
-	ipHeader->tos = 0;
-	ipHeader->tot_len = len;
-	ipHeader->frag_off = IP_DF; // Don't fragment
-	ipHeader->ttl = ttl;
-	ipHeader->protocol = IPPROTO_ICMP;
-	ipHeader->daddr = destIp;
-
-	uint8_t *icmpPacket = packet + sizeof(struct iphdr);
-	struct icmphdr *icmpHeader = (struct icmphdr *)(icmpPacket);
-	icmpHeader->type = ICMP_ECHO;
-	icmpHeader->code = 0;
-	icmpHeader->checksum = checksum((unsigned short *)icmpPacket, len - sizeof(struct iphdr));
-}
-
-
 int main (int argc, char *argv[]) {
 	std::string destIP = "";
 
@@ -88,7 +64,7 @@ int main (int argc, char *argv[]) {
 		FATAL << "Error creating send socket: " << std::strerror(errno) << ENDL;
 		exit(-1);
 	}
-	int recvFd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+	int recvFd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if (recvFd == -1) {
 		FATAL << "Error creating receive socket: " << std::strerror(errno) << ENDL;
 		close(sendFd);
@@ -104,16 +80,18 @@ int main (int argc, char *argv[]) {
 	memset(sendBuffer, 'A', BUFFER_LEN); // Fill payload
 	
 	struct iphdr *ipHeader = (struct iphdr *)sendBuffer;
+	memset(sendBuffer, 0, sizeof(struct iphdr));
 	ipHeader->ihl = 5; // Header length / 4
 	ipHeader->version = 4;
 	ipHeader->tos = 0;
-	ipHeader->tot_len = BUFFER_LEN;
+	ipHeader->tot_len = htons(BUFFER_LEN);
 	ipHeader->frag_off = IP_DF; // Don't fragment
 	ipHeader->protocol = IPPROTO_ICMP;
 	ipHeader->daddr = destAddr.sin_addr.s_addr;
 
 	uint8_t *icmpPacket = sendBuffer + sizeof(struct iphdr);
 	struct icmphdr *icmpHeader = (struct icmphdr *)(icmpPacket);
+	memset(icmpPacket, 0, sizeof(struct icmphdr));
 	icmpHeader->type = ICMP_ECHO;
 	icmpHeader->code = 0;
 
@@ -150,8 +128,8 @@ int main (int argc, char *argv[]) {
 
 			DEBUG << "Waiting up to " << SELECT_TIMEOUT << " seconds for data to become available" << ENDL;
 			if ((selectReturned = select(recvFd + 1, &readFdSet, NULL, NULL, &timeout)) < 0) {
-				WARNING << "select timed out, totalTimeout = " << totalTimeout << ENDL;
-				continue;
+				FATAL << "select error: " << std::strerror(errno) << ENDL;
+				break;
 			}
 			DEBUG << "selectReturned = " << selectReturned << ENDL;
 
@@ -164,27 +142,26 @@ int main (int argc, char *argv[]) {
 
 		if (ready) {
 			struct sockaddr_in recvAddr;
-			socklen_t recvAddrLen;
+			socklen_t recvAddrLen = 0;
 			if (recvfrom(recvFd, recvBuffer, BUFFER_LEN, 0, (struct sockaddr *)&recvAddr, &recvAddrLen) < 0) {
 				ERROR << "recvfrom error: " << std::strerror(errno) << ENDL;
 				continue;
 			}
 
-			struct icmphdr *icmpHeaderResp = (struct icmphdr *)(recvBuffer + sizeof(struct iphdr));
-			if (icmpHeaderResp->type == ICMP_ECHOREPLY) {
+			struct iphdr *ipResp = (struct iphdr *)recvBuffer;
+			struct icmphdr *icmpResp = (struct icmphdr *)(recvBuffer + ipResp->ihl * 4);
+			if (icmpResp->type == ICMP_ECHOREPLY) {
 				DEBUG << "ICMP echo response received" << ENDL;
-				char *respIp = new char[INET_ADDRSTRLEN];
+				char respIp[INET_ADDRSTRLEN];
 				inet_ntop(AF_INET, &recvAddr.sin_addr, respIp, INET_ADDRSTRLEN);
 				std::cout << respIp << std::endl;
-				delete[] respIp;
 				break;
 			}
-			else if (icmpHeaderResp->type == ICMP_TIME_EXCEEDED && icmpHeaderResp->code == ICMP_EXC_TTL) {
+			else if (icmpResp->type == ICMP_TIME_EXCEEDED && icmpResp->code == ICMP_EXC_TTL) {
 				DEBUG << "ICMP TTL exceeded response received" << ENDL;
-				char *respIp = new char[INET_ADDRSTRLEN];
+				char respIp[INET_ADDRSTRLEN];
 				inet_ntop(AF_INET, &recvAddr.sin_addr, respIp, INET_ADDRSTRLEN);
 				std::cout << respIp << std::endl;
-				delete[] respIp;
 			}
 			else {
 				WARNING << "Other ICMP type/subtype received" << ENDL;
