@@ -84,8 +84,6 @@ int main (int argc, char *argv[]) {
 	ipHeader->ihl = 5; // Header length / 4
 	ipHeader->version = 4;
 	ipHeader->tos = 0;
-	ipHeader->tot_len = htons(BUFFER_LEN);
-	ipHeader->frag_off = IP_DF; // Don't fragment
 	ipHeader->protocol = IPPROTO_ICMP;
 	ipHeader->daddr = destAddr.sin_addr.s_addr;
 
@@ -101,13 +99,17 @@ int main (int argc, char *argv[]) {
 	unsigned int ttl = START_TTL;
 	for (unsigned int req = 0; req < MAX_REQUESTS; req++) {
 		ipHeader->ttl = ttl;
-		icmpHeader->checksum = checksum((unsigned short *)icmpPacket, BUFFER_LEN - sizeof(struct iphdr));
+		icmpHeader->checksum = 0;
+		uint16_t calculatedChecksum = checksum((unsigned short *)icmpPacket, BUFFER_LEN - sizeof(struct iphdr));
+		icmpHeader->checksum = calculatedChecksum;
 
 		DEBUG << "Sending packet with TTL = " << ttl << ", checksum = " << icmpHeader->checksum << ENDL;
-		if (sendto(sendFd, sendBuffer, BUFFER_LEN, 0, (struct sockaddr *)&destAddr, sizeof(destAddr)) == -1) {
+		int bytesSent = 0;
+		if ((bytesSent = sendto(sendFd, sendBuffer, BUFFER_LEN, 0, (struct sockaddr *)&destAddr, sizeof(destAddr))) == -1) {
 			ERROR << "sendto error: " << strerror(errno) << ENDL;
 			break;
 		}
+		DEBUG << "bytesSent = " << bytesSent << ENDL;
 
 		// ********************************************************************
 		// * Non-blocking read.
