@@ -22,6 +22,12 @@ inline int LOG_LEVEL = 0;
 #define FATAL   if (LOG_LEVEL > 0) { std::cout << "FATAL: "
 #define ENDL  " (" << __FILE__ << ":" << __LINE__ << ")" << std::endl; }
 
+#define BUFFER_LEN 64
+#define MAX_REQUESTS 30
+#define START_TTL 2
+#define RESPONSE_TIMEOUT 15
+#define SELECT_TIMEOUT 5
+
 uint16_t checksum(unsigned short *buffer, int size);
 
 #endif
