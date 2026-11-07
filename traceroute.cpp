@@ -20,27 +20,25 @@ uint16_t checksum(unsigned short *buffer, int size) {
 
 
 int main (int argc, char *argv[]) {
-  std::string destIP;
+	std::string destIP;
 
-  // ********************************************************************
-  // * Process the command line arguments
-  // ********************************************************************
-  int opt = 0;
-  while ((opt = getopt(argc,argv,"t:d:")) != -1) {
-
-    switch (opt) {
-    case 't':
-      destIP = optarg;
-      break;
-    case 'd':
-      LOG_LEVEL = atoi(optarg);;
-      break;
-    case ':':
-    case '?':
-    default:
-      std::cout << "useage: " << argv[0] << " -t [target ip] -d [Debug Level]" << std::endl;
-      exit(-1);
-    }
-  }
-
+	// ********************************************************************
+	// * Process the command line arguments
+	// ********************************************************************
+	int opt = 0;
+	while ((opt = getopt(argc,argv,"t:d:")) != -1) {
+		switch (opt) {
+		case 't':
+			destIP = optarg;
+			break;
+		case 'd':
+			LOG_LEVEL = atoi(optarg);;
+			break;
+		case ':':
+		case '?':
+		default:
+			std::cout << "useage: " << argv[0] << " -t [target ip] -d [Debug Level]" << std::endl;
+			exit(-1);
+		}
+	}
 }
